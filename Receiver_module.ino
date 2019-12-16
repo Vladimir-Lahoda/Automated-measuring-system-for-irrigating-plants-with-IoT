@@ -24,7 +24,7 @@ uint8_t localAddress = 0xBC;                                      // Adress of t
 uint8_t WSL_ADRESS = 0xBB;                                        // Adress of WSL sender 
 
 char ssid[] = "TP-LINK_E46FG";                                    // SSID of WiFi  
-char pass[] = "prohosty";                                         // Password for WiFi  
+char pass[] = "********";                                         // Password for WiFi  
 const char * WriteAPIKey_weather = "QYOXSTCGVWUVB9Z9";            // API Keys of THINGSPEAK channels
 const char * WriteAPIKey_service = "FZJXEPFV4K0PBG42";
 WiFiClient  client;                                               //  WiFi mode - client
