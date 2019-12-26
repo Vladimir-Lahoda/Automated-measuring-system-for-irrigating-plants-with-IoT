@@ -2,7 +2,7 @@
 #include "ThingSpeak.h"
 #include <WiFi.h>
 
-int8_t temperature;   
+float temperature;   
 float soil_mois;
 float aku_level;
 uint8_t uv;
@@ -10,8 +10,8 @@ uint8_t watter_level;
 uint16_t brightness;
 uint8_t bright_MSB;
 uint8_t bright_LSB;
-int pressure;
-uint8_t humidity;
+float pressure;
+float humidity;
 int web_err_weather;
 int web_err_service;
 int wait;
@@ -69,14 +69,14 @@ void kit_inic(){                                                  // Function fo
 
 void Display_values(){                                            // Function for draw values on OLED display
   Heltec.display->clear();
-  Heltec.display->drawString(0 , 0 , "Temperature: " + String(temperature) + "°C");
-  Heltec.display->drawString(0 , 10 , "Humidity: " + String(humidity) + " %");
+  Heltec.display->drawString(0 , 0 , "Temperature: " + String(temperature,1) + "°C");
+  Heltec.display->drawString(0 , 10 , "Humidity: " + String(humidity,1) + " %");
   Heltec.display->drawString(0 , 20 , "Soil Moisture: " + String(soil_mois, 1) + " %");
   Heltec.display->drawString(0 , 30 , "Tank: " + String(watter_level) + " %");
   Heltec.display->drawString(65 , 30 , "AKU: " + String(aku_level, 1) + " %");
   Heltec.display->drawString(0 , 40 , "Bright: " + String(brightness) + " lux");
   Heltec.display->drawString(85 , 40 , "UV: " + String(uv));  
-  Heltec.display->drawString(0 , 50 , "Pressure: " + String(pressure) + " hPa");
+  Heltec.display->drawString(0 , 50 , "Pressure: " + String(pressure, 1) + " hPa");
   Heltec.display->display();
 }
 
@@ -111,7 +111,7 @@ void setup() {
   WiFi.begin(ssid, pass);                          // WiFi connect
   LoRa.setSpreadingFactor(9);                      // Set spreading factor of LoRa (between 6-12) 
   LoRa.setSignalBandwidth(62.5E3);                 // Set Bandwidth for LoRa
-  pinMode(2, INPUT_PULLUP);                        // Set pin for Button as input with internal Pull-UP resistor
+  pinMode(0, INPUT_PULLUP);                        // Set pin for Button as input with internal Pull-UP resistor
   Heltec.display->init();                          // Initialization for OLED display
   //Heltec.display->flipScreenVertically();        // Rotating OLED (180°)
   logo();                                          // Draw LOGO on OLED after turn on for 9s
@@ -137,7 +137,7 @@ void loop() {
       soil_mois = LoRa.read()/2.5;
       aku_level = LoRa.read()/2.5;
       watter_level = LoRa.read();
-      humidity = LoRa.read();
+      humidity = LoRa.read()/2.5;
       uint8_t pres = LoRa.read();
       uv = LoRa.read();
       bright_MSB = LoRa.read();
@@ -145,8 +145,8 @@ void loop() {
 
       brightness = 0;
       brightness = bright_MSB *256 + bright_LSB;
-      temperature = map(temp, 0, 255, -128, 127);             // Some parameters must be decode to right range  
-      pressure = map(pres, 0, 255, 844, 1100);
+      temperature = map(temp, 0, 250, -25.0, 135.0)/2.5;             // Some parameters must be decode to right range  
+      pressure = map(pres, 0, 255, 2397.0, 2723.0)/2.55;
       
       web_err_weather = WebUpdate_weather();                  // Calling functions for Thingspeak update
       web_err_service = WebUpdate_service();
@@ -168,7 +168,7 @@ void loop() {
    ESP.restart();
   }
 
-  if (digitalRead(2) == LOW)        // Condition for OLED button - function for turn on or turn off OLED display
+  if (digitalRead(0) == LOW)        // Condition for OLED button - function for turn on or turn off OLED display
   {
    if(disp == true)
    {
