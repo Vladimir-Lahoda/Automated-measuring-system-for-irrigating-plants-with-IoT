@@ -4,10 +4,12 @@
 
 int8_t temperature;   
 uint8_t soil_mois;
-uint8_t aku_level;
+float aku_level;
 uint8_t uv;
 uint8_t watter_level;
-int brightness;
+uint16_t brightness;
+uint8_t bright_MSB;
+uint8_t bright_LSB;
 int pressure;
 uint8_t humidity;
 int web_err_weather;
@@ -24,7 +26,7 @@ uint8_t localAddress = 0xBC;                                      // Adress of t
 uint8_t WSL_ADRESS = 0xBB;                                        // Adress of WSL sender 
 
 char ssid[] = "TP-LINK_E46FG";                                    // SSID of WiFi  
-char pass[] = "********";                                         // Password for WiFi  
+char pass[] = "prohosty";                                         // Password for WiFi  
 const char * WriteAPIKey_weather = "QYOXSTCGVWUVB9Z9";            // API Keys of THINGSPEAK channels
 const char * WriteAPIKey_service = "FZJXEPFV4K0PBG42";
 WiFiClient  client;                                               //  WiFi mode - client
@@ -71,7 +73,7 @@ void Display_values(){                                            // Function fo
   Heltec.display->drawString(0 , 10 , "Humidity: " + String(humidity) + " %");
   Heltec.display->drawString(0 , 20 , "Soil Moisture: " + String(soil_mois) + " %");
   Heltec.display->drawString(0 , 30 , "Tank: " + String(watter_level) + " %");
-  Heltec.display->drawString(65 , 30 , "AKU: " + String(aku_level) + " %");
+  Heltec.display->drawString(65 , 30 , "AKU: " + String(aku_level, 1) + " %");
   Heltec.display->drawString(0 , 40 , "Bright: " + String(brightness) + " lux");
   Heltec.display->drawString(85 , 40 , "UV: " + String(uv));  
   Heltec.display->drawString(0 , 50 , "Pressure: " + String(pressure) + " hPa");
@@ -133,17 +135,30 @@ void loop() {
       rssi = LoRa.packetRssi();                               // RSSI is a level of receive signal (in dBm)
       uint8_t temp = LoRa.read();                             // LoRa.read() is function for read only 1B
       soil_mois = LoRa.read();
-      aku_level = LoRa.read();
+      aku_level = LoRa.read()/2.5;
       watter_level = LoRa.read();
-      brightness = LoRa.read();
+      humidity = LoRa.read();
       uint8_t pres = LoRa.read();
       uv = LoRa.read();
-      humidity = LoRa.read();
+      bright_MSB = LoRa.read();
+      bright_LSB = LoRa.read();
+
+      brightness = 0;
+      brightness = bright_MSB *256 + bright_LSB;
       temperature = map(temp, 0, 255, -128, 127);             // Some parameters must be decode to right range  
       pressure = map(pres, 0, 255, 844, 1100);
       
       web_err_weather = WebUpdate_weather();                  // Calling functions for Thingspeak update
       web_err_service = WebUpdate_service();
+
+      if(brightness < 28)
+      {
+        Heltec.display->sleep();
+      }
+      else
+      {
+        Heltec.display->wakeup();
+      }
 
       Display_values();                                       // Calling function for draw to OLED display 
     }
