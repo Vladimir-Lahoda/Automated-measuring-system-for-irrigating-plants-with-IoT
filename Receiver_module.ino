@@ -3,7 +3,7 @@
 #include <WiFi.h>
 
 int8_t temperature;   
-uint8_t soil_mois;
+float soil_mois;
 float aku_level;
 uint8_t uv;
 uint8_t watter_level;
@@ -71,7 +71,7 @@ void Display_values(){                                            // Function fo
   Heltec.display->clear();
   Heltec.display->drawString(0 , 0 , "Temperature: " + String(temperature) + "°C");
   Heltec.display->drawString(0 , 10 , "Humidity: " + String(humidity) + " %");
-  Heltec.display->drawString(0 , 20 , "Soil Moisture: " + String(soil_mois) + " %");
+  Heltec.display->drawString(0 , 20 , "Soil Moisture: " + String(soil_mois, 1) + " %");
   Heltec.display->drawString(0 , 30 , "Tank: " + String(watter_level) + " %");
   Heltec.display->drawString(65 , 30 , "AKU: " + String(aku_level, 1) + " %");
   Heltec.display->drawString(0 , 40 , "Bright: " + String(brightness) + " lux");
@@ -134,7 +134,7 @@ void loop() {
       wait = millis();
       rssi = LoRa.packetRssi();                               // RSSI is a level of receive signal (in dBm)
       uint8_t temp = LoRa.read();                             // LoRa.read() is function for read only 1B
-      soil_mois = LoRa.read();
+      soil_mois = LoRa.read()/2.5;
       aku_level = LoRa.read()/2.5;
       watter_level = LoRa.read();
       humidity = LoRa.read();

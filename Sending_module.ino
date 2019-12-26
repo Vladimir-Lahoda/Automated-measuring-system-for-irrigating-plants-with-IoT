@@ -88,7 +88,7 @@ void setup()
   int pres = (BME280.readPressure()/100.00) + 32;                                                     // Calculating pressure from BME280 including correction
   uint8_t pressure = constrain(map(pres, 844, 1100, 0, 255),0,255);                                   // Change adjust to value 0 - 255 (1 B)    
   uint8_t humidity = BME280.readHumidity();                                                           // Function for read humidity from BME280
-  uint8_t soil_mos = constrain(map(soil,2909,1327, 0, 100), 0, 100);                                  // Calculating value of Soil moisture from analog voltage
+  uint8_t soil_mos = constrain(map(soil,2909,1327, 0, 250), 0, 250);                                  // Calculating value of Soil moisture from analog voltage
   uint8_t uvIndex = UV_Index(UV_volt);                                                                // Function for calculatin UV index
   uint8_t waterLevel = constrain(map(distance, distance_surface, distance_bottom, 100, 0), 0, 100);   // Function for calculating water level from distance value
   TSL_2561.begin();
