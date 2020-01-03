@@ -22,13 +22,13 @@ uint8_t sender;
 uint8_t packet_size;
 bool disp;
 
-uint8_t localAddress = 0xBC;                                      // Adress of this device
-uint8_t WSL_ADRESS = 0xBB;                                        // Adress of WSL sender 
+uint8_t localAddress = **;                                      // Adress of this device
+uint8_t WSL_ADRESS = **;                                        // Adress of WSL sender 
 
-char ssid[] = "TP-LINK_E46FG";                                    // SSID of WiFi  
-char pass[] = "prohosty";                                         // Password for WiFi  
-const char * WriteAPIKey_weather = "QYOXSTCGVWUVB9Z9";            // API Keys of THINGSPEAK channels
-const char * WriteAPIKey_service = "FZJXEPFV4K0PBG42";
+char ssid[] = "*************";                                    // SSID of WiFi  
+char pass[] = "********";                                         // Password for WiFi  
+const char * WriteAPIKey_weather = "****************";            // API Keys of THINGSPEAK channels
+const char * WriteAPIKey_service = "****************";
 WiFiClient  client;                                               //  WiFi mode - client
 
 void logo(){                                                      // Function for draw a logo (only name of project after turn ON)
