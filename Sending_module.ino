@@ -1,4 +1,5 @@
 #include "heltec.h"
+#include "secrets.h"
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include "Arduino.h"
@@ -10,10 +11,10 @@
 
 //-------------------------------------------------------------PINS---------------------------------------------------------------------------
 #define DS18B20 23                                                                                    // Thermometer PIN 
-#define SOIL_M 1                                                                                      // Soil Mosture PIN 
+#define SOIL_M 2                                                                                      // Soil Mosture PIN 
 #define SWITCH 2                                                                                      // Water pump switch PIN   
 #define VCC 15                                                                                        // Sensors switch PIN 
-#define POWER_LEVEL 2                                                                                 // Power level PIN 
+#define POWER_LEVEL 1                                                                                 // Power level PIN 
 #define UVM 0                                                                                         // UV sensor PIN on external ADC
 #define RX1 10                                                                                        // UART1 pin - RX (UART0 is used for PC connect)
 #define TX1 9                                                                                         // UART1 pin - TX
@@ -26,19 +27,18 @@
 #define TIME_WATER 0.5                                                                                // Pump on time (in minutes)
 #define distance_bottom 370                                                                           // Distance from sensor US-100 to water bottom (in mm)
 #define distance_surface 50                                                                           // Distance from sensor US-100 to water surface (in mm)
-#define RES 0.125                                                                                     // Constant of ADC (resolution)
+#define RES 0.1875                                                                                    // Constant of ADC (resolution)
 
 #define BME280_ADDRESS (0x76)                                                                         // BME280 I2C adress
 #define ADS_1115_ADDRESS (0x48)                                                                       // ADC I2C adress 
 #define TSL2561_ADDRESS (0x39)
-uint8_t localAddress = 0xBB;                                                                          // Address of this device (WSL Sender)
-uint8_t destination = 0xBC;                                                                           // Address of receiver (WiFi Kit V2)
+
 
 HardwareSerial hwSerial_1(1);                                                                         // Declaration for UART1  
 Adafruit_BME280 BME280;                                                                               // Declaration for BME280
 OneWire oneWireDS(DS18B20);                                                                           // Declaration oneWire bus (on pin DS18B20)
 DallasTemperature DS_Temp(&oneWireDS);                                                                // Declaration for thermometer on oneWire bus
-Adafruit_ADS1115 ADS1115;                                                                             // Declaration for ADC
+Adafruit_ADS1115 ADS1115(0x48);                                                                       // Declaration for ADC
 Adafruit_TSL2561_Unified TSL_2561 = Adafruit_TSL2561_Unified(TSL2561_ADDRESS, 12345);
 
 void setup()
@@ -58,7 +58,7 @@ void setup()
                     Adafruit_BME280::SAMPLING_X1,                                                     // Pressure sampling
                     Adafruit_BME280::SAMPLING_X1,                                                     // Humidity sampling
                     Adafruit_BME280::FILTER_OFF   );                                                  // IIR filter     
-  ADS1115.setGain(GAIN_ONE);                                                                          // 1x gain   +/- 4.096V  1 bit = 0.125mV
+  //ADS1115.setGain(GAIN_TWOTHIRDS);                                                                     // 2/3x gain   +/- 6.144V  1 bit = 0.1875mV
   ADS1115.begin();                                                                                    // ADC inicialization  
   hwSerial_1.begin(9600, SERIAL_8N1, RX1, TX1);                                                       // Inicializaton of UART1 (UART0 is used by PC programming and console, ESP32 has got 3 UARTS)
   TSL_2561.enableAutoRange(true);
@@ -66,19 +66,24 @@ void setup()
   delay(100);                                                                                          // Delay for inicialization  
   
   
-  digitalWrite(VCC, HIGH);                                                                            // Switching on the sensors connected to the switch and delay for balance 
-  delay(800);                                                                                         // Delay for value stabilization after turn on
+  //digitalWrite(VCC, HIGH);                                                                            // Switching on the sensors connected to the switch and delay for balance 
+  //delay(800);                                                                                         // Delay for value stabilization after turn on
   int soil = ADS1115.readADC_SingleEnded(SOIL_M) * RES;                                               // Read from ADC and calculating value
-  float UV_volt = constrain((ADS1115.readADC_SingleEnded(UVM) * RES - 62),0.0,1170.0);                // Read from ADC and calculating value
+  float UV_volt = constrain((ADS1115.readADC_SingleEnded(UVM) * RES),0.0,1170.0);                // Read from ADC and calculating value
   uint16_t distance = Water_level();
-  digitalWrite(VCC, LOW);                                                                             // Switching of the sensors connected to the switch
+  //digitalWrite(VCC, LOW);                                                                             // Switching of the sensors connected to the switch
 
   DS_Temp.setResolution(9);                                                                           // Set resolution for thermometer,the lowest resolution is sufficient (9 bit)
   DS_Temp.requestTemperatures();                                                                      // Get data from thermometer(s)
+  float aku_volt = 0;
+  for(int i = 0; i < 3; i++)
+  {
+    aku_volt += (ADS1115.readADC_SingleEnded(POWER_LEVEL) * RES * 2);
+  }
+  aku_volt /= 3; 
   
-//  int distance = Water_level();
-  uint8_t temperature = constrain(map(DS_Temp.getTempCByIndex(0), -10.0, 54.0, 0, 250), 0, 250);                              // Data format adjustment (Temperature between -128 to 127 is adjust to 0 - 255 (1B))              
-  float aku_volt = ADS1115.readADC_SingleEnded(POWER_LEVEL) * RES * 2;                                // Read from ADC and calculating value (*Resolution and *2 because there is voltage divider (1:1))
+  uint8_t temperature = constrain(map(DS_Temp.getTempCByIndex(0), -10.0, 54.0, 0, 250), 0, 250);        // Data format adjustment (Temperature between -128 to 127 is adjust to 0 - 255 (1B))              
+ // float aku_volt = ADS1115.readADC_SingleEnded(POWER_LEVEL) * RES * 2;                                // Read from ADC and calculating value (*Resolution and *2 because there is voltage divider (1:1))
   uint8_t batteryLevel = constrain(map(aku_volt, 3200, 4150, 0, 250), 0, 250);                        // Data format adjustment (Battery level betwen 4,15V (100%) and 3,2V (0%))
   float pres = (BME280.readPressure()/100.00) + 32;                                                     // Calculating pressure from BME280 including correction
   uint8_t pressure = constrain(map(pres, 940.0, 1068.0, 0, 255),0,255);                                   // Change adjust to value 0 - 255 (1 B)    
@@ -93,11 +98,12 @@ void setup()
   uint16_t brightness = event.light;                                                                       // Value from luxmeter  
   uint8_t bright_MSB = brightness / 256;
   uint8_t bright_LSB = brightness % 256;
+  uint8_t parity_control = V2_ADDRESS xor WSL_ADDRESS xor temperature xor soil_mos xor batteryLevel xor waterLevel xor humidity xor pressure xor uvIndex xor bright_MSB xor bright_LSB;
   int MS_time = millis() - begin_m;                                                                   // Calculate measuring time 
   int begin_p = millis();                                                                             // Variable for time calculating
   LoRa.beginPacket();                                                                                 // Begin new LoRa packet 
-  LoRa.write(destination);                                                                            // Write destination adress to LoRa packet (1B)
-  LoRa.write(localAddress);                                                                           // Write local adress to LoRa packet (1B)
+  LoRa.write(V2_ADDRESS);                                                                            // Write destination adress to LoRa packet (1B)
+  LoRa.write(WSL_ADDRESS);                                                                           // Write local adress to LoRa packet (1B)
   LoRa.write(temperature);                                                                            // Write sensors values to LoRa packet (every value - 1B)
   LoRa.write(soil_mos);
   LoRa.write(batteryLevel);
@@ -111,7 +117,7 @@ void setup()
   int TX_time = millis() - begin_p;                                                                   // Calculate sending packet time 
   LoRa.sleep();                                                                                       // Activate sleep mode of LoRa (minimalize energy consumption) 
 
-  serialDiagnostic (temperature, soil_mos, batteryLevel, aku_volt, distance, waterLevel, brightness, pressure, uvIndex, UV_volt, humidity, MS_time, TX_time);       // Function for device diagnostic - print all important values from sensors to UART console 
+  serialDiagnostic (temperature, soil_mos, batteryLevel, aku_volt, distance, waterLevel, brightness, pressure, uvIndex, UV_volt, humidity, parity_control, MS_time, TX_time);       // Function for device diagnostic - print all important values from sensors to UART console 
  // water_switch(soil_mos, waterLevel);                                                               // Function for irrigation management
 
   UnderVoltProt(aku_volt);                                                                            // Function for under discharge protect 
@@ -173,11 +179,12 @@ int Water_level()                                                               
     return (high * 256 + low);                                                                      // Return calculated value of distance
 }
 
-void serialDiagnostic (int8_t temp, uint8_t soil_mos, uint8_t batteryLevel, float aku_volt, int distance, uint8_t waterLevel, int jas, int pressure, uint8_t uvIndex, int UV_volt, uint8_t vlhkost_v, int MS_time, int TX_time)
+void serialDiagnostic (int8_t temp, uint8_t soil_mos, uint8_t batteryLevel, float aku_volt, int distance, uint8_t waterLevel, int jas, int pressure, uint8_t uvIndex, int UV_volt, uint8_t humidity, uint8_t parity_control, int MS_time, int TX_time)
 {
+  float temperature = map(temp, 0, 250, -25.0, 135.0)/2.5;
   Serial.begin(115200);
   Serial.print("Temperature: ");
-  Serial.print(map(temp, 0, 250, -10.0, 54.0));
+  Serial.print(temperature);
   Serial.println(" °C");
   Serial.print("Soil moisture: ");
   Serial.print(soil_mos/2.5);
@@ -205,8 +212,10 @@ void serialDiagnostic (int8_t temp, uint8_t soil_mos, uint8_t batteryLevel, floa
   Serial.print(UV_volt);
   Serial.println(" mV");
   Serial.print("Humidity: ");
-  Serial.print(map(vlhkost_v, 0, 250, 0.0, 100.0));
+  Serial.print(map(humidity, 0, 250, 0.0, 100.0));
   Serial.println(" %");
+  Serial.print("Parity control: ");
+  Serial.println(parity_control);
   Serial.print("Measuring time: ");
   Serial.print(MS_time);
   Serial.println(" ms");

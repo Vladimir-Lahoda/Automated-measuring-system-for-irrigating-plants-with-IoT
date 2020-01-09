@@ -1,34 +1,15 @@
 #include "heltec.h" 
 #include "ThingSpeak.h"
+#include "secrets.h"
 #include <WiFi.h>
 
-float temperature;   
-float soil_mois;
-float aku_level;
-uint8_t uv;
-uint8_t watter_level;
+float temperature, soil_mois, aku_level, pressure, humidity;
+uint8_t uv, watter_level, bright_MSB, bright_LSB, recipient, sender, packet_size;
 uint16_t brightness;
-uint8_t bright_MSB;
-uint8_t bright_LSB;
-float pressure;
-float humidity;
-int web_err_weather;
-int web_err_service;
-int wait;
-bool pump_active;
+int web_err_weather, web_err_service, wait;
+bool pump_active, disp;
 int16_t rssi;
-uint8_t recipient;
-uint8_t sender;
-uint8_t packet_size;
-bool disp;
 
-uint8_t localAddress = **;                                      // Adress of this device
-uint8_t WSL_ADRESS = **;                                        // Adress of WSL sender 
-
-char ssid[] = "*************";                                    // SSID of WiFi  
-char pass[] = "********";                                         // Password for WiFi  
-const char * WriteAPIKey_weather = "****************";            // API Keys of THINGSPEAK channels
-const char * WriteAPIKey_service = "****************";
 WiFiClient  client;                                               //  WiFi mode - client
 
 void logo(){                                                      // Function for draw a logo (only name of project after turn ON)
@@ -130,7 +111,7 @@ void loop() {
     recipient = LoRa.read();         
     sender = LoRa.read();
   
-    if (recipient == localAddress & sender == WSL_ADRESS){    // If any LoRa packet is available, the first 2 address bytes are checked here, if they are the same as set, the whole message is received
+    if (recipient == V2_ADDRESS & sender == WSL_ADDRESS){    // If any LoRa packet is available, the first 2 address bytes are checked here, if they are the same as set, the whole message is received
       wait = millis();
       rssi = LoRa.packetRssi();                               // RSSI is a level of receive signal (in dBm)
       uint8_t temp = LoRa.read();                             // LoRa.read() is function for read only 1B
