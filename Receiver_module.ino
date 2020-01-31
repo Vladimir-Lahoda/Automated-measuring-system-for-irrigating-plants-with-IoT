@@ -56,8 +56,21 @@ void Display_values(){                                            // Function fo
   Heltec.display->drawString(0 , 30 , "Tank: " + String(watter_level) + " %");
   Heltec.display->drawString(65 , 30 , "AKU: " + String(aku_level, 1) + " %");
   Heltec.display->drawString(0 , 40 , "Bright: " + String(brightness) + " lux");
-  Heltec.display->drawString(85 , 40 , "UV: " + String(uv));  
   Heltec.display->drawString(0 , 50 , "Pressure: " + String(pressure, 1) + " hPa");
+  if(uv ==12)
+  {
+    Heltec.display->drawString(85 , 40 , "UV Error");
+  }
+  else
+  {
+    Heltec.display->drawString(85 , 40 , "UV: " + String(uv));  
+  }
+  Heltec.display->display();
+}
+
+void Display_parity_error(){                                            // Function for draw values on OLED display
+  Heltec.display->clear();
+  Heltec.display->drawString(8 , 25 , "LoRa Parity ERROR !!!");
   Heltec.display->display();
 }
 
@@ -68,8 +81,11 @@ int WebUpdate_weather(){                                          // Function fo
   ThingSpeak.setField(4, watter_level);
   ThingSpeak.setField(5, brightness);
   ThingSpeak.setField(6, pressure);
-  ThingSpeak.setField(7, uv);
   ThingSpeak.setField(8, humidity);
+  if (uv < 12)
+  {
+  ThingSpeak.setField(7, uv);
+  }
   int x = ThingSpeak.writeFields(849764, WriteAPIKey_weather);
   return x;
 }
@@ -81,9 +97,11 @@ int WebUpdate_service(){                                          // Function fo
   ThingSpeak.setField(3, packet_size);
   ThingSpeak.setField(4, sender);
   ThingSpeak.setField(5, String(day_on, DEC));
+  ThingSpeak.setField(6, 0);
   int x = ThingSpeak.writeFields(901557, WriteAPIKey_service);
   return x;
 }
+
 
 void setup() { 
   Heltec.begin(true, true, false, false, 868E6);   
@@ -115,22 +133,23 @@ void loop() {
       wait = millis();
       rssi = LoRa.packetRssi();                               // RSSI is a level of receive signal (in dBm)
       uint8_t temp = LoRa.read();                             // LoRa.read() is function for read only 1B
-      soil_mois = LoRa.read()/2.5;
-      aku_level = LoRa.read()/2.5;
+      uint8_t soilMois = LoRa.read();
+      uint8_t akuLevel = LoRa.read();
       watter_level = LoRa.read();
-      humidity = LoRa.read()/2.5;
+      uint8_t humid = LoRa.read();
       uint8_t pres = LoRa.read();
       uv = LoRa.read();
       bright_MSB = LoRa.read();
       bright_LSB = LoRa.read();
-
-      brightness = 0;
+      uint8_t parity_control_WSL = LoRa.read();
+      uint8_t parity_control_V2 = recipient xor sender xor temp xor soilMois xor akuLevel xor watter_level xor humid xor pres xor uv xor bright_MSB xor bright_LSB;
       brightness = bright_MSB *256 + bright_LSB;
       temperature = map(temp, 0, 250, -25.0, 135.0)/2.5;             // Some parameters must be decode to right range  
       pressure = map(pres, 0, 255, 2397.0, 2723.0)/2.55;
       
-      web_err_weather = WebUpdate_weather();                  // Calling functions for Thingspeak update
-      web_err_service = WebUpdate_service();
+      soil_mois = soilMois / 2.5;
+      aku_level = map(akuLevel, 0, 250, 3200, 4200);
+      humidity = humid / 2.5;
 
       if(brightness < 28)
       {
@@ -140,8 +159,16 @@ void loop() {
       {
         Heltec.display->wakeup();
       }
-
-      Display_values();                                       // Calling function for draw to OLED display 
+      if(parity_control_WSL == parity_control_V2)
+      {
+        web_err_weather = WebUpdate_weather();                  // Calling functions for Thingspeak update
+        web_err_service = WebUpdate_service();
+        Display_values();                                       // Calling function for draw to OLED display 
+      }
+      else
+      {
+        Display_parity_error();
+      }
     }
   }
   
