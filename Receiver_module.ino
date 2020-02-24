@@ -148,7 +148,7 @@ void loop() {
       pressure = map(pres, 0, 255, 2397.0, 2723.0)/2.55;
       
       soil_mois = soilMois / 2.5;
-      aku_level = map(akuLevel, 0, 250, 3200, 4200);
+      aku_level = map(akuLevel, 0, 250, 3200, 4480);
       humidity = humid / 2.5;
 
       if(brightness < 28)

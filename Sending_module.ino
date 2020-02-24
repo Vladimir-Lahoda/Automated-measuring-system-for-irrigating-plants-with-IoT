@@ -7,6 +7,7 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
 #include <Adafruit_TSL2561_U.h>
+#include <Adafruit_VEML6070.h>
 
 //-------------------------------------------------------------PINS---------------------------------------------------------------------------
 #define DS18B20 23                                                                                    // Thermometer PIN 
@@ -39,6 +40,7 @@ Adafruit_BME280 BME280;                                                         
 OneWire oneWireDS(DS18B20);                                                                           // Declaration oneWire bus (on pin DS18B20)
 DallasTemperature DS_Temp(&oneWireDS);                                                                // Declaration for thermometer on oneWire bus
 Adafruit_TSL2561_Unified TSL_2561 = Adafruit_TSL2561_Unified(TSL2561_ADDRESS, 12345);
+Adafruit_VEML6070 UV = Adafruit_VEML6070();
 
 void setup()
 {
@@ -50,6 +52,7 @@ void setup()
   int begin_m = millis();                                                                             // Variable for measuring time  
   pinMode(SWITCH,OUTPUT);                                                                             // Set SWITCH Pin as Output for water pump switch
   DS_Temp.begin();                                                                                    // Begin thermometer (DS18B20)
+  UV.begin(VEML6070_1_T);
   BME280.begin(BME280_ADDRESS);                                                                       // Inicialization BME280 on I2C adress, next step is setting for parameters (selected setting for lowest power consumption)
   BME280.setSampling(Adafruit_BME280::MODE_FORCED,                                                    // Forced mode - single mode    
                     Adafruit_BME280::SAMPLING_X1,                                                     // Temperature sampling
@@ -59,6 +62,7 @@ void setup()
   hwSerial_1.begin(9600, SERIAL_8N1, RX1, TX1);                                                       // Inicializaton of UART1 (UART0 is used by PC programming and console, ESP32 has got 3 UARTS)
   TSL_2561.enableAutoRange(true);
   TSL_2561.setIntegrationTime(TSL2561_INTEGRATIONTIME_13MS);
+
   
   float pres = (BME280.readPressure()/100.00) + 32;                                                   // Calculating pressure from BME280 including correction
   uint8_t pressure = constrain(map(pres, 940.0, 1068.0, 0, 250),0,250);                               // Change adjust to value 0 - 255 (1 B)    
@@ -76,18 +80,21 @@ void setup()
  
   //adcAttachPin(13);
   analogSetClockDiv(255);
-  double aku_volt = ((analogRead(39) * RES1 * 32) / 10) + 306;
+  delay(75);
+  float aku_volt = ((analogRead(39) * RES1 * 32) / 10) + 363;
   delay(50);
-  float UV_volt = constrain(analogRead(37) * RES1, 0.0, 1170.0);
-  delay(10);
+  float soil = analogRead(36) * RES1; 
+  float UV_volt = 0; //constrain(analogRead(37) * RES1, 0.0, 1170.0);
+  //delay(10);
   uint16_t distance = Water_level();
-  int soil = analogRead(36) * RES1;                                                                
+                                                                 
   
-  uint8_t batteryLevel = constrain(map(aku_volt, 3200, 4200, 0, 250), 0, 250);                        // Data format adjustment (Battery level betwen 4,2V (100%) and 3,2V (0%))                                            
-  uint8_t soil_mos = constrain(map(soil,2909,1327, 0, 250), 0, 250);                                  // Calculating value of Soil moisture from analog voltage
-  uint8_t uvIndex = UV_Index(UV_volt);                                                                // Function for calculatin UV index
+  uint8_t batteryLevel = constrain(map(aku_volt, 3200, 4480, 0, 250), 0, 250);                        // Data format adjustment (Battery level betwen 4,2V (100%) and 3,2V (0%))                                            
+  uint8_t soil_mos = constrain(map(soil,2909.0, 1327.0, 0, 250), 0, 250);                                  // Calculating value of Soil moisture from analog voltage
+  //uint8_t uvIndex = UV_Index_UVM(UV_volt);                                                                // Function for calculatin UV index
+  uint8_t uvIndex = UV_Index_VEML(UV.readUV());
   uint8_t waterLevel = constrain(map(distance, distance_surface, distance_bottom, 100, 0), 0, 100);   // Function for calculating water level from distance value
-  
+  UV.sleep(HIGH);
   
   
   uint8_t parity_control = V2_ADDRESS xor WSL_ADDRESS xor temperature xor soil_mos xor batteryLevel xor waterLevel xor humidity xor pressure xor uvIndex xor bright_MSB xor bright_LSB;
@@ -121,7 +128,7 @@ void setup()
 
   serialDiagnostic (temperature, soil_mos, batteryLevel, aku_volt, distance, waterLevel, brightness, pressure, uvIndex, UV_volt, humidity, parity_control, MS_time, TX_time);       // Function for device diagnostic - print all important values from sensors to UART console 
  // water_switch(soil_mos, waterLevel);                                                               // Function for irrigation management
-  digitalWrite(21,LOW);
+  digitalWrite(15,LOW);
   UnderVoltProt(aku_volt);                                                                            // Function for under discharge protect 
   esp_sleep_enable_timer_wakeup(SLEEP * 1000000);                                                     // Set timer for Deep sleep mode (parameter SLEEP)
   esp_deep_sleep_start();                                                                             // Enable deep sleep mode - Current consumption WSL in deep sleep mode: 1.8mA
@@ -144,7 +151,7 @@ void water_switch(float soil_mos, int waterLevel)                               
     }
   }
 
-float UV_Index(float voltage)                                                                         // Function for calculatin UV index from analog voltage (according to the linearized characteristic given by the datasheet UMV30A)
+float UV_Index_UVM(float voltage)                                                                         // Function for calculatin UV index from analog voltage (according to the linearized characteristic given by the datasheet UMV30A)
   {
   int volt = constrain(voltage, 0, 1171);
   float UV_index;
@@ -163,6 +170,22 @@ float UV_Index(float voltage)                                                   
 return UV_index;
   }
 
+uint8_t UV_Index_VEML(float index)                                                                         // Function for calculatin UV index from analog voltage (according to the linearized characteristic given by the datasheet UMV30A)
+  {
+  if(index <= 186) return 0;
+  else if (index > 186 & index <= 373) return 1;
+  else if (index > 373 & index <= 560) return 2;
+  else if (index > 560 & index <= 747) return 3;
+  else if (index > 747 & index <= 933) return 4;
+  else if (index > 933 & index <= 1120) return 5;
+  else if (index > 1120 & index <= 1307) return 6;
+  else if (index > 1307 & index <= 1494) return 7;
+  else if (index > 1494 & index <= 1681) return 8;
+  else if (index > 1681 & index <= 1868) return 9;
+  else if (index > 1868 & index <= 2054) return 10;
+  else if (index > 2054 & index <= 65000) return 11;
+  }
+  
 void UnderVoltProt(float aku_volt)                                                                  // Function for under discharge protect (if aku voltage is lower than the set parameter, is permanently enabled deep sleep mode)
   {
   if(aku_volt < 3200)
@@ -198,7 +221,7 @@ void serialDiagnostic (int8_t temp, uint8_t soil_mos, uint8_t batteryLevel, floa
   Serial.print("AKU charge status: ");
   Serial.print(aku_volt);
   Serial.print("mV  |  Comprimated: ");
-  Serial.print(map(batteryLevel, 0, 250, 3200, 4200));
+  Serial.print(map(batteryLevel, 0, 250, 3200, 4480));
   Serial.println(" mV");
   Serial.print("Vzdálenost hladiny: ");
   Serial.print(distance);
