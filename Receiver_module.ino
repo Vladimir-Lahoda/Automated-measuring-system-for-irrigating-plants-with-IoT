@@ -109,7 +109,7 @@ void setup() {
   ThingSpeak.begin(client);                        // Initialization of Thingspeak library (client mode)
   WiFi.begin(ssid, pass);                          // WiFi connect
   LoRa.setSpreadingFactor(9);                      // Set spreading factor of LoRa (between 6-12) 
-  LoRa.setSignalBandwidth(62.5E3);                 // Set Bandwidth for LoRa
+  LoRa.setSignalBandwidth(125E3);                 // Set Bandwidth for LoRa
   pinMode(0, INPUT_PULLUP);                        // Set pin for Button as input with internal Pull-UP resistor
   Heltec.display->init();                          // Initialization for OLED display
   //Heltec.display->flipScreenVertically();        // Rotating OLED (180°)
