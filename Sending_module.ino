@@ -12,23 +12,26 @@
 //-------------------------------------------------------------PINS---------------------------------------------------------------------------
 #define DS18B20 23                                                                                    // Thermometer PIN 
 #define SOIL_M 36                                                                                     // Soil Mosture PIN 
-#define SWITCH 2                                                                                      // Water pump switch PIN   
-#define VCC 15                                                                                        // Sensors switch PIN 
+#define PUMP_FEEDBACK 37
+#define PUMP 12                                                                                       // Water pump switch PIN   
+#define VCC 2                                                                                         // Sensors switch PIN 
 #define POWER_LEVEL 39                                                                                // Power level PIN 
 #define RX1 10                                                                                        // UART1 pin - RX (UART0 is used for PC connect)
 #define TX1 9                                                                                         // UART1 pin - TX
 
 //----------------------------------------------------------PARAMETERS------------------------------------------------------------------------
 
-#define SLEEP    180                                                                                  // Deep sleep for X second
+#define SLEEP    300                                                                                  // Deep sleep for X second
 #define SOIL_MOS_MIN 40                                                                               // Minimal soil mosture (%)
 #define WATER_LIMIT 15                                                                                // Minimal water level (%)
 #define TIME_WATER 0.5                                                                                // Pump on time (in minutes)
 #define distance_bottom 370                                                                           // Distance from sensor US-100 to water bottom (in mm)
 #define distance_surface 50                                                                           // Distance from sensor US-100 to water surface (in mm)
 #define RES 0.805664                                                                                  // Constant of ADC (resolution)
-
-
+#define SOIL_MIN 2796.0
+#define SOIL_MAX 1320.0
+#define BRIG_MAX 6500
+#define UV_MAX 5
 #define BME280_ADDRESS (0x76)                                                                         // BME280 I2C adress
 #define TSL2561_ADDRESS (0x39)
 
@@ -43,12 +46,13 @@ Adafruit_VEML6070 UV = Adafruit_VEML6070();
 void setup()
 {
   
-  pinMode(15, OUTPUT);
-  digitalWrite(15, HIGH);                                                                             // Switching on the sensors connected to the switch and delay for balance                                                                     
-  delay(300);
+  pinMode(VCC, OUTPUT);
+  digitalWrite(VCC, HIGH);                                                                             // Switching on the sensors connected to the switch and delay for balance                                                                     
+  delay(350);
   Heltec.begin(false, true, true, false, 868E6);                                                      // Inicialization WSL:  Display OFF (false),  LoRa ON (true), Serial ON (true), PA BOOST OFF (false), LoRa frequency (868MHz for czech)
   int begin_m = millis();                                                                             // Variable for measuring time  
-  pinMode(SWITCH,OUTPUT);                                                                             // Set SWITCH Pin as Output for water pump switch
+  pinMode(PUMP,OUTPUT);                                                                               // Set SWITCH Pin as Output for water pump switch
+  pinMode(PUMP_FEEDBACK, INPUT);
   DS_Temp.begin();                                                                                    // Begin thermometer (DS18B20)
   UV.begin(VEML6070_1_T);
   BME280.begin(BME280_ADDRESS);                                                                       // Inicialization BME280 on I2C adress, next step is setting for parameters (selected setting for lowest power consumption)
@@ -60,44 +64,57 @@ void setup()
   hwSerial_1.begin(9600, SERIAL_8N1, RX1, TX1);                                                       // Inicializaton of UART1 (UART0 is used by PC programming and console, ESP32 has got 3 UARTS)
   TSL_2561.begin();
   TSL_2561.enableAutoRange(true);
-  TSL_2561.setIntegrationTime(TSL2561_INTEGRATIONTIME_13MS);
+  TSL_2561.setIntegrationTime(TSL2561_INTEGRATIONTIME_101MS);
   analogSetClockDiv(255);
     
   
   float pres = (BME280.readPressure()/100.00) + 32;                                                   // Calculating pressure from BME280 including correction
-  uint8_t pressure = constrain(map(pres, 940.0, 1068.0, 0, 250),0,250);                               // Change adjust to value 0 - 255 (1 B)    
+  uint8_t pressure = constrain((1.9531 * pres - 1835.9),0,250);                               // Change adjust to value 0 - 255 (1 B)    
   float humid = BME280.readHumidity();                                                                // Function for read humidity from BME280
-  uint8_t humidity = constrain(map(humid, 0.0, 100.0, 0, 250), 0, 250); 
+  uint8_t humidity = constrain((2.5 * humid), 0, 250); 
+
+  float aku_volt = ((analogRead(POWER_LEVEL) * RES) / 0.30986)+400;
+  uint8_t batteryLevel = constrain((0.1953*aku_volt - 625.0), 0, 250);                        // Data format adjustment (Battery level betwen 4,2V (100%) and 3,2V (0%))        
   
   sensors_event_t event;
   TSL_2561.getEvent(&event);
   uint16_t brightness = event.light;                                                                  // Value from luxmeter  
   uint8_t bright_MSB = brightness / 256;
   uint8_t bright_LSB = brightness % 256;
-  DS_Temp.setResolution(9);                                                                           // Set resolution for thermometer,the lowest resolution is sufficient (9 bit)
+  DS_Temp.setResolution(10);                                                                           // Set resolution for thermometer,the lowest resolution is sufficient (9 bit)
   DS_Temp.requestTemperatures();                                                                      // Get data from thermometer(s)
-  uint8_t temperature = constrain(map(DS_Temp.getTempCByIndex(0), -10.0, 54.0, 0, 250), 0, 250);      // Data format adjustment (Temperature between -128 to 127 is adjust to 0 - 255 (1B)) 
+  uint8_t temperature = constrain((3.9063 * DS_Temp.getTempCByIndex(0)+ 39.063), 0, 250);      // Data format adjustment (Temperature between -128 to 127 is adjust to 0 - 255 (1B)) 
   uint16_t UV_num = UV.readUV();                                                                      // Function for calculatin UV index
   uint8_t uvIndex = UV_Index_VEML(UV_num);
   uint16_t distance = Water_level();
   uint8_t waterLevel = constrain(map(distance, distance_surface, distance_bottom, 100, 0), 0, 100);   // Function for calculating water level from distance value
 
-  delay(15);
-  float aku_volt = ((analogRead(POWER_LEVEL) * RES * 32) / 10) + 363;
-  uint8_t batteryLevel = constrain(map(aku_volt, 3200, 4480, 0, 250), 0, 250);                        // Data format adjustment (Battery level betwen 4,2V (100%) and 3,2V (0%))        
-  delay(50);
+  //delay(15);
+      
+ // delay(50);
   float soil = analogRead(SOIL_M) * RES;                                
-  uint8_t soil_mos = constrain(map(soil,2909.0, 1327.0, 0, 250), 0, 250);                             // Calculating value of Soil moisture from analog voltage                                                               
+  uint8_t soil_mos = constrain(map(soil,SOIL_MIN, SOIL_MAX, 0, 250), 0, 250);                         // Calculating value of Soil moisture from analog voltage                                                               
   UV.sleep(HIGH);
   
-   // water_switch(soil_mos, waterLevel);                                                             // Function for irrigation management
+  uint8_t pump = water_switch(soil_mos, waterLevel, brightness, uvIndex);                                                             // Function for irrigation management
+  
+  if(pump == 1)
+  {
+    uvIndex += 128;
+  }
+  else if (pump == 2)
+  {
+    uvIndex += 64;
+  }
+  
+  
   uint8_t parity_control = V2_ADDRESS xor WSL_ADDRESS xor temperature xor soil_mos xor batteryLevel xor waterLevel xor humidity xor pressure xor uvIndex xor bright_MSB xor bright_LSB;
 
   
   LoRa.idle();                                                                                        // Set LoRa to Standby mode
   LoRa.setTxPower(14,PA_OUTPUT_RFO_PIN);                                                              // Set transmit power of LoRa and pin (for RFO is between 0 and 14, for PA BOOST is 0-17. In Czech republic is transmit power limit max 25mW (14dBm)) 
   LoRa.setSpreadingFactor(9);                                                                         // Set spreading factor of LoRa (between 6-12) 
-  LoRa.setSignalBandwidth(125E3);                                                                    // Set frequency bandwith (62,5E3 - 250E3 Hz)
+  LoRa.setSignalBandwidth(125E3);                                                                     // Set frequency bandwith (62,5E3 - 250E3 Hz)
   int MS_time = millis() - begin_m;                                                                   // Calculate measuring time 
   int begin_p = millis();                                                                             // Variable for time calculating
   LoRa.beginPacket();                                                                                 // Begin new LoRa packet 
@@ -119,9 +136,9 @@ void setup()
 
 
 
-  serialDiagnostic (temperature, soil_mos, batteryLevel, aku_volt, distance, waterLevel, brightness, pressure, uvIndex, UV_num, humidity, parity_control, MS_time, TX_time);       // Function for device diagnostic - print all important values from sensors to UART console 
+  // serialDiagnostic (temperature, soil_mos, batteryLevel, aku_volt, distance, waterLevel, brightness, pressure, uvIndex, UV_num, humidity, parity_control, MS_time, TX_time);       // Function for device diagnostic - print all important values from sensors to UART console 
 
-  digitalWrite(15,LOW);
+  digitalWrite(VCC,LOW);
   UnderVoltProt(aku_volt);                                                                            // Function for under discharge protect 
   esp_sleep_enable_timer_wakeup(SLEEP * 1000000);                                                     // Set timer for Deep sleep mode (parameter SLEEP)
   esp_deep_sleep_start();                                                                             // Enable deep sleep mode - Current consumption WSL in deep sleep mode: 1.8mA
@@ -131,20 +148,31 @@ void loop()
 {
 }
 
-void water_switch(float soil_mos, int waterLevel)                                                     // Function for irrigation management (if soil moisture is less than the set parameter and water level in tank is higher than the set parameter, is turn on pump to parameter time)
+uint8_t water_switch(float soil_mos, uint8_t waterLevel, uint16_t brightness, uint8_t uv)            // Function for irrigation management (if soil moisture is less than the set parameter and water level in tank is higher than the set parameter, is turn on pump to parameter time)
   {
-  if(soil_mos < SOIL_MOS_MIN & waterLevel > WATER_LIMIT)
+  if((soil_mos/2.5) < SOIL_MOS_MIN & waterLevel > WATER_LIMIT & brightness < BRIG_MAX & uv < UV_MAX)
     {
-    digitalWrite(SWITCH, HIGH);
-    delay(TIME_WATER*60000);
-    digitalWrite(SWITCH, LOW);    
+      digitalWrite(PUMP, HIGH);
+      delay(200);
+      if (digitalRead(37))
+      {    
+        delay(TIME_WATER*60000);
+        digitalWrite(PUMP, LOW);
+        return 1;
+      }
+      else
+      {
+        digitalWrite(PUMP, LOW);
+        return 2;
+      }   
     }
-  else
+    else
     {
+      return 0;
     }
   }
 
-uint8_t UV_Index_VEML(float index)                                                                         // Function for calculatin UV index from analog voltage (according to the linearized characteristic given by the datasheet UMV30A)
+uint8_t UV_Index_VEML(float index)                                                                    // Function for calculatin UV index from analog voltage (according to the linearized characteristic given by the datasheet UMV30A)
   {
   if(index <= 186) return 0;
   else if (index > 186 & index <= 373) return 1;
@@ -212,8 +240,7 @@ void serialDiagnostic (int8_t temp, uint8_t soil_mos, uint8_t batteryLevel, floa
   Serial.print("UV index: ");
   Serial.println(uvIndex);
   Serial.print("UV number: ");
-  Serial.print(UV_num);
-  Serial.println(" mV");
+  Serial.println(UV_num);
   Serial.print("Humidity: ");
   Serial.print(map(humidity, 0, 250, 0.0, 100.0));
   Serial.println(" %");
