@@ -32,6 +32,7 @@
 #define SOIL_MAX 1320.0
 #define BRIG_MAX 6500
 #define UV_MAX 5
+
 #define BME280_ADDRESS (0x76)                                                                         // BME280 I2C adress
 #define TSL2561_ADDRESS (0x39)
 
@@ -63,7 +64,7 @@ void setup()
                     Adafruit_BME280::FILTER_OFF   );                                                  // IIR filter     
   hwSerial_1.begin(9600, SERIAL_8N1, RX1, TX1);                                                       // Inicializaton of UART1 (UART0 is used by PC programming and console, ESP32 has got 3 UARTS)
   TSL_2561.begin();
-  TSL_2561.enableAutoRange(true);
+  TSL_2561.setGain(TSL2561_GAIN_16X);
   TSL_2561.setIntegrationTime(TSL2561_INTEGRATIONTIME_101MS);
   analogSetClockDiv(255);
     
@@ -88,10 +89,7 @@ void setup()
   uint8_t uvIndex = UV_Index_VEML(UV_num);
   uint16_t distance = Water_level();
   uint8_t waterLevel = constrain(map(distance, distance_surface, distance_bottom, 100, 0), 0, 100);   // Function for calculating water level from distance value
-
-  //delay(15);
-      
- // delay(50);
+  delay(5);
   float soil = analogRead(SOIL_M) * RES;                                
   uint8_t soil_mos = constrain(map(soil,SOIL_MIN, SOIL_MAX, 0, 250), 0, 250);                         // Calculating value of Soil moisture from analog voltage                                                               
   UV.sleep(HIGH);
@@ -136,7 +134,7 @@ void setup()
 
 
 
-  // serialDiagnostic (temperature, soil_mos, batteryLevel, aku_volt, distance, waterLevel, brightness, pressure, uvIndex, UV_num, humidity, parity_control, MS_time, TX_time);       // Function for device diagnostic - print all important values from sensors to UART console 
+ serialDiagnostic (temperature, soil_mos, batteryLevel, aku_volt, distance, waterLevel, brightness, pressure, uvIndex, UV_num, humidity, parity_control, MS_time, TX_time);       // Function for device diagnostic - print all important values from sensors to UART console 
 
   digitalWrite(VCC,LOW);
   UnderVoltProt(aku_volt);                                                                            // Function for under discharge protect 
@@ -190,24 +188,24 @@ uint8_t UV_Index_VEML(float index)                                              
   
 void UnderVoltProt(float aku_volt)                                                                  // Function for under discharge protect (if aku voltage is lower than the set parameter, is permanently enabled deep sleep mode)
   {
-  if(aku_volt < 3200)
+  if(aku_volt < 3250)
     {
     esp_deep_sleep_start();
     }
   }
 
-int Water_level()                                                                                   // Function for getting distance value from ultrasonic sensor (US-100) via UART1
+uint16_t Water_level()                                                                                   // Function for getting distance value from ultrasonic sensor (US-100) via UART1
 {
     uint8_t high;
     uint8_t low;
     hwSerial_1.write(0x55);
     delay(350); 
-    if (hwSerial_1.available()) 
+    if (hwSerial_1.available()>= 2) 
     {
       high = hwSerial_1.read();
       low = hwSerial_1.read();
     }
-    return (high * 256 + low);                                                                      // Return calculated value of distance
+    return ((high * 256 + low)-40);                                                                      // Return calculated value of distance
 }
 
 void serialDiagnostic (int8_t temp, uint8_t soil_mos, uint8_t batteryLevel, float aku_volt, int distance, uint8_t waterLevel, int bright, uint16_t pressure, uint8_t uvIndex, uint16_t UV_num, uint8_t humidity, uint8_t parity_control, int MS_time, int TX_time)
