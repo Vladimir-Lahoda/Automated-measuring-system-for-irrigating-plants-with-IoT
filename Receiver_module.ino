@@ -11,7 +11,7 @@ uint16_t brightness;
 int web_err_weather, web_err_service, wait;
 bool pump_active, disp, pump_error, parity_error;
 int16_t rssi;
-
+int bat;
 
 WiFiClient  client;                                               //  WiFi mode - client
 
@@ -81,13 +81,13 @@ void Display_parity_error(){                                            // Funct
 }
 
 int WebUpdate_weather(){                                          // Function for update Thingspeak channel for weather station
-  ThingSpeak.setField(1, temperature);
-  ThingSpeak.setField(2, soil_mois);
-  ThingSpeak.setField(3, aku_level);
+  ThingSpeak.setField(1, String(temperature, 2));
+  ThingSpeak.setField(2, String(soil_mois, 2));
+  ThingSpeak.setField(3, String(aku_level, 1));
   ThingSpeak.setField(4, watter_level);
   ThingSpeak.setField(5, brightness);
-  ThingSpeak.setField(6, String(pressure,1));
-  ThingSpeak.setField(8, humidity);
+  ThingSpeak.setField(6, String(pressure, 2));
+  ThingSpeak.setField(8, String(humidity, 1));
   ThingSpeak.setField(7, uv);
   int x = ThingSpeak.writeFields(849764, WriteAPIKey_weather);
   return x;
@@ -111,7 +111,7 @@ void Protects()
     ESP.restart();
   }
   if (WiFi.status() != WL_CONNECTED || web_err_weather != 200 || web_err_service != 200){ // Protective condition - guard status WiFi, updates and time of last LoRa message
-    esp_sleep_enable_timer_wakeup(1200000000);
+    esp_sleep_enable_timer_wakeup(300000);
     esp_deep_sleep_start();
   }
   if ((millis() - wait) > (wait_WSL * 60000) && aku_level <= 3250.0){ // Protective condition - guard time of last LoRa message
@@ -135,16 +135,18 @@ void Display_control()
    }
   }
 }
+
 void setup() { 
   Heltec.begin(true, true, false, false, 868E6);   
   WiFi.mode(WIFI_STA);  
   ThingSpeak.begin(client);                        // Initialization of Thingspeak library (client mode)
   WiFi.begin(ssid, pass);                          // WiFi connect
   LoRa.setSpreadingFactor(9);                      // Set spreading factor of LoRa (between 6-12) 
-  LoRa.setSignalBandwidth(125E3);                 // Set Bandwidth for LoRa
+  LoRa.setSignalBandwidth(125E3);                  // Set Bandwidth for LoRa
   pinMode(0, INPUT_PULLUP);                        // Set pin for Button as input with internal Pull-UP resistor
+  pinMode(21, OUTPUT);
   Heltec.display->init();                          // Initialization for OLED display
-  //Heltec.display->flipScreenVertically();        // Rotating OLED (180°)
+  Heltec.display->flipScreenVertically();          // Rotating OLED (180°)
   
   logo();                                          // Draw LOGO on OLED after turn on for 9s
   kit_inic();                                      // Call function for intialization
@@ -156,7 +158,6 @@ void setup() {
   pump_error = LOW;
   wait = millis();                                 // Variable wait is set to actual time after start (must be set for protective condition) 
   LoRa.receive();                                  // Set LoRa receive mode (LoRa modul SX1276 continuously receives data) 
-  
 }
 
 void loop() {
@@ -186,7 +187,7 @@ void loop() {
       soil_mois = soilMois / 2.5;
       aku_level = 5.12 * akuLevel + 3200;
       humidity = humid / 2.5;
-     
+      //watter_level *= 5;
       
       if(uv > 63 & uv < 127)
       {

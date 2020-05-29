@@ -9,6 +9,7 @@
 #include <Adafruit_TSL2561_U.h>
 #include <Adafruit_VEML6070.h>
 
+
 //-------------------------------------------------------------PINS---------------------------------------------------------------------------
 #define DS18B20 23                                                                                    // Thermometer PIN 
 #define SOIL_M 36                                                                                     // Soil Mosture PIN 
@@ -16,12 +17,12 @@
 #define PUMP 12                                                                                       // Water pump switch PIN   
 #define VCC 2                                                                                         // Sensors switch PIN 
 #define POWER_LEVEL 39                                                                                // Power level PIN 
-#define RX1 10                                                                                        // UART1 pin - RX (UART0 is used for PC connect)
-#define TX1 9                                                                                         // UART1 pin - TX
+//#define UART-RX1 9                                                                                        // UART1 pin - RX (UART0 is used for PC connect)
+//#define UART-TX1 10                                                                                         // UART1 pin - TX
 
 //----------------------------------------------------------PARAMETERS------------------------------------------------------------------------
 
-#define SLEEP    300                                                                                  // Deep sleep for X second
+#define SLEEP    180                                                                                  // Deep sleep for X second
 #define SOIL_MOS_MIN 40                                                                               // Minimal soil mosture (%)
 #define WATER_LIMIT 15                                                                                // Minimal water level (%)
 #define TIME_WATER 0.5                                                                                // Pump on time (in minutes)
@@ -37,7 +38,7 @@
 #define TSL2561_ADDRESS (0x39)
 
 
-HardwareSerial hwSerial_1(1);                                                                         // Declaration for UART1  
+HardwareSerial hwSerial_1(2);                                                                         // Declaration for UART1  
 Adafruit_BME280 BME280;                                                                               // Declaration for BME280
 OneWire oneWireDS(DS18B20);                                                                           // Declaration oneWire bus (on pin DS18B20)
 DallasTemperature DS_Temp(&oneWireDS);                                                                // Declaration for thermometer on oneWire bus
@@ -46,15 +47,16 @@ Adafruit_VEML6070 UV = Adafruit_VEML6070();
 
 void setup()
 {
-  
+  int begin_m = millis();                                                                             // Variable for measuring time  
   pinMode(VCC, OUTPUT);
   digitalWrite(VCC, HIGH);                                                                             // Switching on the sensors connected to the switch and delay for balance                                                                     
-  delay(350);
-  Heltec.begin(false, true, true, false, 868E6);                                                      // Inicialization WSL:  Display OFF (false),  LoRa ON (true), Serial ON (true), PA BOOST OFF (false), LoRa frequency (868MHz for czech)
-  int begin_m = millis();                                                                             // Variable for measuring time  
+  delay(4500);
+  Heltec.begin(false, true, false, false, 868E6);                                                      // Inicialization WSL:  Display OFF (false),  LoRa ON (true), Serial ON (true), PA BOOST OFF (false), LoRa frequency (868MHz for czech)
+  hwSerial_1.begin(9600, SERIAL_8N1, 9, 10);                                                       // Inicializaton of UART1 (UART0 is used by PC programming and console, ESP32 has got 3 UARTS)
   pinMode(PUMP,OUTPUT);                                                                               // Set SWITCH Pin as Output for water pump switch
   pinMode(PUMP_FEEDBACK, INPUT);
   DS_Temp.begin();                                                                                    // Begin thermometer (DS18B20)
+  Serial.begin(115200);
   UV.begin(VEML6070_1_T);
   BME280.begin(BME280_ADDRESS);                                                                       // Inicialization BME280 on I2C adress, next step is setting for parameters (selected setting for lowest power consumption)
   BME280.setSampling(Adafruit_BME280::MODE_FORCED,                                                    // Forced mode - single mode    
@@ -62,12 +64,12 @@ void setup()
                     Adafruit_BME280::SAMPLING_X1,                                                     // Pressure sampling
                     Adafruit_BME280::SAMPLING_X1,                                                     // Humidity sampling
                     Adafruit_BME280::FILTER_OFF   );                                                  // IIR filter     
-  hwSerial_1.begin(9600, SERIAL_8N1, RX1, TX1);                                                       // Inicializaton of UART1 (UART0 is used by PC programming and console, ESP32 has got 3 UARTS)
   TSL_2561.begin();
   TSL_2561.setGain(TSL2561_GAIN_16X);
   TSL_2561.setIntegrationTime(TSL2561_INTEGRATIONTIME_101MS);
+  Serial.println("OK1");
   analogSetClockDiv(255);
-    
+  
   
   float pres = (BME280.readPressure()/100.00) + 32;                                                   // Calculating pressure from BME280 including correction
   uint8_t pressure = constrain((1.9531 * pres - 1835.9),0,250);                               // Change adjust to value 0 - 255 (1 B)    
@@ -76,7 +78,7 @@ void setup()
 
   float aku_volt = ((analogRead(POWER_LEVEL) * RES) / 0.30986)+400;
   uint8_t batteryLevel = constrain((0.1953*aku_volt - 625.0), 0, 250);                        // Data format adjustment (Battery level betwen 4,2V (100%) and 3,2V (0%))        
-  
+  Serial.println("OK2");
   sensors_event_t event;
   TSL_2561.getEvent(&event);
   uint16_t brightness = event.light;                                                                  // Value from luxmeter  
@@ -87,13 +89,25 @@ void setup()
   uint8_t temperature = constrain((3.9063 * DS_Temp.getTempCByIndex(0)+ 39.063), 0, 250);      // Data format adjustment (Temperature between -128 to 127 is adjust to 0 - 255 (1B)) 
   uint16_t UV_num = UV.readUV();                                                                      // Function for calculatin UV index
   uint8_t uvIndex = UV_Index_VEML(UV_num);
-  uint16_t distance = Water_level();
+  delay(800);
+  Serial.println("OK3");
+  hwSerial_1.flush();
+  Serial.println("OK4");
+  hwSerial_1.write(0x55);
+  while(!hwSerial_1.available());
+  uint8_t high = hwSerial_1.read();
+  uint8_t low = hwSerial_1.read();
+  uint16_t distance = (high * 256 + low)-40;
+  Serial.println("OK5");
+ if(distance < 50 | distance > 450) ESP.restart();
+  //int waterLevel = (-0,0625 * distance + 23,125);
   uint8_t waterLevel = constrain(map(distance, distance_surface, distance_bottom, 100, 0), 0, 100);   // Function for calculating water level from distance value
   delay(5);
   float soil = analogRead(SOIL_M) * RES;                                
   uint8_t soil_mos = constrain(map(soil,SOIL_MIN, SOIL_MAX, 0, 250), 0, 250);                         // Calculating value of Soil moisture from analog voltage                                                               
   UV.sleep(HIGH);
-  
+  //hwSerial_1.end();
+  Serial.println("OK6");
   uint8_t pump = water_switch(soil_mos, waterLevel, brightness, uvIndex);                                                             // Function for irrigation management
   
   if(pump == 1)
@@ -194,21 +208,20 @@ void UnderVoltProt(float aku_volt)                                              
     }
   }
 
-uint16_t Water_level()                                                                                   // Function for getting distance value from ultrasonic sensor (US-100) via UART1
+/*uint16_t Water_level()                                                                                   // Function for getting distance value from ultrasonic sensor (US-100) via UART1
 {
     uint8_t high;
     uint8_t low;
     hwSerial_1.write(0x55);
-    delay(350); 
-    if (hwSerial_1.available()>= 2) 
-    {
-      high = hwSerial_1.read();
-      low = hwSerial_1.read();
-    }
+    //delay(500); 
+    while(hwSerial_1.available());
+    uint8_t high = hwSerial_1.read();
+    uint8_t low = hwSerial_1.read();
+      
     return ((high * 256 + low)-40);                                                                      // Return calculated value of distance
 }
-
-void serialDiagnostic (int8_t temp, uint8_t soil_mos, uint8_t batteryLevel, float aku_volt, int distance, uint8_t waterLevel, int bright, uint16_t pressure, uint8_t uvIndex, uint16_t UV_num, uint8_t humidity, uint8_t parity_control, int MS_time, int TX_time)
+*/
+void serialDiagnostic (int8_t temp, uint8_t soil_mos, uint8_t batteryLevel, float aku_volt, uint16_t distance, uint8_t waterLevel, int bright, uint16_t pressure, uint8_t uvIndex, uint16_t UV_num, uint8_t humidity, uint8_t parity_control, int MS_time, int TX_time)
 {
   float temperature = map(temp, 0, 250, -25.0, 135.0)/2.5;
   Serial.begin(115200);
