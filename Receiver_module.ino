@@ -24,7 +24,7 @@ void logo(){                                                      // Function fo
   Heltec.display->display();                                      // Show on display (render)
   Heltec.display->setFont(ArialMT_Plain_24);
   Heltec.display->drawString(38 , 41 , "s IoT");
-  Heltec.display->display();
+  Heltec.display->display();                                    
   delay(3500);
   Heltec.display->clear();
   Heltec.display->setFont(ArialMT_Plain_16);
@@ -37,11 +37,11 @@ void logo(){                                                      // Function fo
   delay(3500);
 }
 
-void kit_inic(){                                                  // Function for initialization module
-  byte MAC_address[6]; 
-  WiFi.macAddress(MAC_address);
+void kit_inic(){                                                  // Function for initialization module - inicialization screen
+  byte MAC_address[6];                                            // New variable for MAC address
+  WiFi.macAddress(MAC_address);                                   // Write MAC address to variable MAC_Address and create string for MAC address in corrcet form
   String MAC = String() + String(MAC_address[0], HEX) + ":" +  String(MAC_address[1], HEX) + ":" +  String(MAC_address[2], HEX) + ":" +  String(MAC_address[3], HEX) + ":" + String(MAC_address[4], HEX) + ":" + String(MAC_address[5], HEX); 
-  Heltec.display->clear();
+  Heltec.display->clear();                                        // Clear display, set font and write MAC address to OLED display
   Heltec.display->setFont(ArialMT_Plain_10);
   Heltec.display->drawString(0, 0, "MAC: " + MAC);
   
@@ -49,19 +49,19 @@ void kit_inic(){                                                  // Function fo
       
       String IP = String() + WiFi.localIP()[0] + "." + WiFi.localIP()[1] + "." + WiFi.localIP()[2] + "." + WiFi.localIP()[3];
       String Mask = String() + WiFi.subnetMask()[0] + "." + WiFi.subnetMask()[1] + "." + WiFi.subnetMask()[2] + "." + WiFi.subnetMask()[3];
-      Heltec.display->drawString(0 ,10 , "WiFi : " + String(ssid));
-      Heltec.display->drawString(0 ,20 , "IP : " + IP);
+      Heltec.display->drawString(0 ,10 , "WiFi : " + String(ssid));       // Create strings for IP address and Mask (same as MAC address)
+      Heltec.display->drawString(0 ,20 , "IP : " + IP);                   // Display these parameters on OLED display (SSID, IP, MASK)              
       Heltec.display->drawString(0, 30, "MASK: " + Mask);
   }
   else {
-      Heltec.display->drawString(0 , 15 , "WiFi : ERROR!"); 
+      Heltec.display->drawString(0 , 15 , "WiFi : ERROR!");               // Display WiFi Error if wifi is not successfully connected
   }
   
-  Heltec.display->drawString(0, 45, "Wait for incomming packet");
+  Heltec.display->drawString(0, 45, "Wait for incomming packet");         // Confirmation of successful initialization, render on OLED display
   Heltec.display->display();
 }
 
-void Display_values(){                                            // Function for draw values on OLED display
+void Display_values(){                                                    // Function for draw values on OLED display
   Heltec.display->clear();
   Heltec.display->drawString(0 , 0 , "Temperature: " + String(temperature,1) + "°C");
   Heltec.display->drawString(0 , 10 , "Humidity: " + String(humidity,1) + " %");
@@ -74,7 +74,7 @@ void Display_values(){                                            // Function fo
   Heltec.display->display();
 }
 
-void Display_parity_error(){                                            // Function for draw values on OLED display
+void Display_parity_error(){                                            // Function for draw ERROR if incorrectly received data occurs on OLED display
   Heltec.display->clear();
   Heltec.display->drawString(8 , 25 , "LoRa CRC ERROR !!!");
   Heltec.display->display();
@@ -94,7 +94,7 @@ int WebUpdate_weather(){                                          // Function fo
 }
 
 int WebUpdate_service(){                                          // Function for update Thingspeak service channel
-  double day_on = millis()/3600000.00;
+  double day_on = millis()/3600000.00;                            // Operating time calculation
   ThingSpeak.setField(1, pump_active);
   ThingSpeak.setField(2, rssi);
   ThingSpeak.setField(3, packet_size);
@@ -105,7 +105,7 @@ int WebUpdate_service(){                                          // Function fo
   return x;
 }
 
-void Protects()
+void Protects()                                                  // Guard function - protective conditions monitoring the current status (wifi connection, internet connection, LoRa receiver)
 {
    if ((millis() - wait) > (wait_WSL * 60000) && aku_level > 3250.0){ // Protective condition - guard status WiFi, updates and time of last LoRa message
     ESP.restart();
@@ -121,7 +121,7 @@ void Protects()
 
 void Display_control()
 {
-  if (digitalRead(0) == LOW)        // Condition for OLED button - function for turn on or turn off OLED display
+  if (digitalRead(0) == LOW)        // Condition for OLED button - function for manually turn on or turn off OLED display
   {
    if(disp == true)
    {
@@ -153,7 +153,7 @@ void setup() {
   web_err_weather = 200;                           // Set variables to 200 (code 200 is OK for update web, must be set for protective condition)
   web_err_service = 200;
   aku_level = 3260.0;
-  disp = true;                                     // Default value for OLED - display after start is turned on     
+  disp = true;                                     // Default value for OLED - display after start is turned on and deafult values for pump status    
   pump_active = LOW;
   pump_error = LOW;
   wait = millis();                                 // Variable wait is set to actual time after start (must be set for protective condition) 
@@ -180,8 +180,8 @@ void loop() {
       bright_LSB = LoRa.read();
       uint8_t parity_control_WSL = LoRa.read();
       uint8_t parity_control_V2 = recipient xor sender xor temp xor soilMois xor akuLevel xor watter_level xor humid xor pres xor uv xor bright_MSB xor bright_LSB;
-      
-      brightness = bright_MSB * 256 + bright_LSB;
+                                                        // Calculating CRC using an XOR operation
+      brightness = bright_MSB * 256 + bright_LSB;       // Calculating Brightness (16 bit value from two 8-bit values)
       temperature = (0.64 * temp - 25)/2.5;             // Some parameters must be decode to right range  
       pressure = (1.28 * pres + 2350)/2.5;
       soil_mois = soilMois / 2.5;
@@ -189,7 +189,7 @@ void loop() {
       humidity = humid / 2.5;
       //watter_level *= 5;
       
-      if(uv > 63 & uv < 127)
+      if(uv > 63 & uv < 127)                            // Demodulate pump status from byte with UV index
       {
         uv -= 64;
         pump_active = LOW;
@@ -214,7 +214,7 @@ void loop() {
       }
 
      
-      if(brightness < 28)
+      if(brightness < 28)                           // Auto turn ON/OFF OLED display (it depends on the ambient lighting)
       {
         Heltec.display->sleep();
       }
@@ -224,7 +224,7 @@ void loop() {
       }
 
       
-      if(parity_control_WSL == parity_control_V2)
+      if(parity_control_WSL == parity_control_V2)     // CRC control check - Here it is recognized whether an error has occurred in the received data
       {
         web_err_weather = WebUpdate_weather();                  // Calling functions for Thingspeak update
         web_err_service = WebUpdate_service();
